@@ -55,23 +55,43 @@
 
 ---
 
-## 数据库脚本规范
+## 数据库初始化规范（基于 mysql/init）
 
-所有 SQL 脚本统一放在 `db/sql` 目录，按用途拆分：
+数据库初始化脚本统一放在 `mysql/init` 目录，当前示例为：
 
-- `db/sql/full/`：**全量初始化脚本**
-  - `001_init_schema.sql`：创建数据库 `demo_db` 与基础表结构（含 `t_user`）
-- `db/sql/migration/`：**增量变更脚本**
-  - `20260209_01_create_t_user.sql`：示例增量脚本（仅创建 `t_user` 表）
-- `db/sql/data/`：**模拟数据脚本**
-  - `001_demo_user_data.sql`：插入多条示例用户数据
+- `mysql/init/001_init_schema.sql`
+  - 创建数据库 `demo_db`
+  - 删除并重建 `t_user` 表（与实体 `com.example.demo.entity.User` 一致）
 
-新环境初始化推荐顺序：
+### 结合 docker-compose 自动初始化
+
+`docker-compose.yml` 中可通过挂载 `mysql/init` 到容器的初始化目录，实现容器启动时自动执行脚本，例如（示意）：
+
+```yaml
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: demo_db
+    volumes:
+      - ./mysql/init:/docker-entrypoint-initdb.d
+```
+
+这样在 **首次启动 MySQL 容器** 时，会自动执行 `001_init_schema.sql` 完成库表初始化。
+
+### 手动在本地执行初始化脚本
+
+如果你使用本机 MySQL，而不是容器自动初始化，可以手动执行：
 
 ```bash
-mysql -h127.0.0.1 -P3306 -uroot -proot < db/sql/full/001_init_schema.sql
-mysql -h127.0.0.1 -P3306 -uroot -proot < db/sql/data/001_demo_user_data.sql
+mysql -h127.0.0.1 -P3306 -uroot -proot < mysql/init/001_init_schema.sql
 ```
+
+如需增加更多表或初始化数据，建议继续在 `mysql/init` 下按编号追加脚本，例如：
+
+- `mysql/init/002_xxx.sql`
+- `mysql/init/003_xxx_data.sql`
 
 ---
 
