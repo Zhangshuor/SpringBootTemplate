@@ -1,225 +1,224 @@
-## Spring Boot 3 MyBatis-Plus Template
+# Spring Boot 3 MyBatis-Plus Template
 
-基于 **Spring Boot 3 / MyBatis-Plus / MySQL / Redis / Knife4j** 的通用后端基础模板，用于快速搭建业务项目起步工程。
-
-### 技术栈
-
-- **后端框架**：Spring Boot 3.x（JDK 17）
-- **ORM**：MyBatis-Plus 3.5.x（分页、乐观锁、逻辑删除、代码生成器）
-- **数据库**：MySQL 8.x + Druid 连接池
-- **缓存**：Redis（Spring Data Redis，统一 JSON 序列化）
-- **工具**：Lombok、Apache Commons Lang3、Jackson
-- **文档**：Knife4j（基于 OpenAPI3 的增强 UI）
-- **构建**：Maven
+基于 **Spring Boot 3 / MyBatis-Plus / MySQL / Redis / Knife4j** 的通用后端基础模板，用于快速搭建业务项目起步工程。本文档面向接手项目的开发者，便于理解结构、约定与本地开发流程，并在此基础上进行业务开发。
 
 ---
 
-## 项目结构与约定
+## 一、技术栈与环境要求
 
-主要包结构（仅列出核心）：
+| 类别     | 技术 / 版本说明 |
+|----------|------------------|
+| 后端框架 | Spring Boot 3.x（JDK 17） |
+| ORM      | MyBatis-Plus 3.5.x（分页、乐观锁、逻辑删除、代码生成器） |
+| 数据库   | MySQL 8.x + Druid 连接池 |
+| 缓存     | Redis（Spring Data Redis，统一 JSON 序列化） |
+| 工具     | Lombok、Apache Commons Lang3、Jackson |
+| 接口文档 | Knife4j（OpenAPI3 增强 UI） |
+| 构建     | Maven |
 
-- `common`：通用基础模块
-  - `api`：统一响应体 `Result<T>`
-  - `config`：全局配置（MyBatis-Plus、Redis、WebMvc、OpenAPI/Knife4j 等）
-  - `constant`：通用常量、错误码 `ErrorCode`
-  - `entity`：基础实体 `BaseEntity`（id/createTime/updateTime/deleted/version）
-  - `exception`：`BusinessException` + `GlobalExceptionHandler`
-  - `interceptor`：`LoggingInterceptor` 请求日志拦截
-  - `page`：`PageQuery`、`PageResult`
-  - `service`：`BaseService`、`BaseServiceImpl`
-  - `util`：`JsonUtil`、`RedisUtil`、`ValidationUtil` 等
-- `controller`：控制层（示例：`UserController`）
-- `service` / `service.impl`：业务服务层（示例：`UserService` / `UserServiceImpl`）
-- `mapper`：MyBatis-Plus `Mapper` 接口（示例：`UserMapper`）
-- `entity`：实体类（示例：`User`，继承 `BaseEntity`）
-- `dto`：**请求 DTO（入参统一放这里）**
-  - `UserCreateReq`：创建用户请求
-  - `UserUpdateReq`：更新用户请求
-  - `UserPageReq`：用户分页查询请求，继承 `PageQuery`
-- `vo`：**视图对象 VO（对外返回统一放这里）**
-  - `UserVO`：用户对外返回数据模型
-- `generator`：MyBatis-Plus 代码生成器示例
+**本地开发建议：**
 
-### DTO / VO 约定
-
-- **DTO（Data Transfer Object）**：只做“入参”
-  - Controller 接收请求体时统一使用 DTO，例如：
-    - `UserCreateReq`、`UserUpdateReq`、`UserPageReq`
-  - 通过 Jakarta Validation（`@NotBlank`、`@Email`、`@Size` 等）做参数校验。
-- **VO（View Object）**：只做“返回值”
-  - Controller 返回统一使用 VO 作为 `Result<T>` 的 `data`：
-    - `Result<UserVO>`、`Result<PageResult<UserVO>>`
-  - 内部由 Service 层从实体 `User` 转为 `UserVO`，只暴露对外需要的字段。
-
-> 统一约定：**Controller：入参 DTO → 内部处理（实体/服务）→ 出参 VO**。
+- JDK 17+
+- Maven 3.6+
+- MySQL 8.x、Redis（或使用项目提供的 Docker 编排）
 
 ---
 
-## 数据库初始化规范（基于 mysql/init）
+## 二、快速开始（本地运行）
 
-数据库初始化脚本统一放在 `mysql/init` 目录，当前示例为：
+### 1. 启动 MySQL 与 Redis
 
-- `mysql/init/001_init_schema.sql`
-  - 创建数据库 `demo_db`
-  - 删除并重建 `t_user` 表（与实体 `com.example.demo.entity.User` 一致）
+**方式一：使用 Docker Compose（推荐）**
 
-### 结合 docker-compose 自动初始化
-
-`docker-compose.yml` 中可通过挂载 `mysql/init` 到容器的初始化目录，实现容器启动时自动执行脚本，例如（示意）：
-
-```yaml
-services:
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: demo_db
-    volumes:
-      - ./mysql/init:/docker-entrypoint-initdb.d
+```bash
+docker-compose up -d mysql redis
 ```
 
-这样在 **首次启动 MySQL 容器** 时，会自动执行 `001_init_schema.sql` 完成库表初始化。
+首次启动 MySQL 时，会自动执行 `mysql/init/001_init_schema.sql`，创建库 `demo_db` 和表 `t_user`。
 
-### 手动在本地执行初始化脚本
+**方式二：使用本机已安装的 MySQL / Redis**
 
-如果你使用本机 MySQL，而不是容器自动初始化，可以手动执行：
+确保端口与 `application.yml` 中 `dev` 配置一致（MySQL 3306、Redis 6379），并手动执行初始化脚本（见下文「数据库初始化」）。
+
+### 2. 初始化数据库（仅在使用本机 MySQL 且未自动执行时）
 
 ```bash
 mysql -h127.0.0.1 -P3306 -uroot -proot < mysql/init/001_init_schema.sql
 ```
 
-如需增加更多表或初始化数据，建议继续在 `mysql/init` 下按编号追加脚本，例如：
+若有其他脚本（如 `002_xxx_data.sql`），按需追加执行。
 
-- `mysql/init/002_xxx.sql`
-- `mysql/init/003_xxx_data.sql`
+### 3. 启动应用
 
----
+```bash
+mvn clean package
+mvn spring-boot:run
+```
 
-## 本地开发运行
+默认：端口 **8080**，Profile **dev**。
 
-1. **启动 MySQL 和 Redis**
+### 4. 验证与接口文档
 
-   - 方式一：使用 `docker-compose.yml`
-     ```bash
-     docker-compose up -d mysql redis
-     ```
-   - 方式二：使用本地已安装的 MySQL / Redis（端口与 `application.yml` 中 dev 配置保持一致）。
-
-2. **初始化数据库（首次或新环境）**
-
-   执行上文中的全量和模拟数据脚本（`001_init_schema.sql` + `001_demo_user_data.sql`）。
-
-3. **启动应用**
-
-   在项目根目录执行：
-   ```bash
-   mvn clean package
-   mvn spring-boot:run
-   ```
-
-   默认：
-   - 端口：`8080`
-   - Profile：`dev`
+- 健康/接口：访问 `http://localhost:8080`
+- **Knife4j 文档**：`http://localhost:8080/doc.html`
+- OpenAPI JSON：`http://localhost:8080/v3/api-docs`
 
 ---
 
-## 示例接口说明
+## 三、项目结构与约定
 
-所有接口均返回统一结构 `Result<T>`，包含：
+### 3.1 包结构概览
 
-- `code`：业务状态码（参考 `ErrorCode`）
+```
+com.example.demo
+├── DemoApplication.java          # 启动类
+├── common                         # 通用基础模块（不建议随意修改）
+│   ├── api                        # 统一响应 Result<T>
+│   ├── config                     # 全局配置（MyBatis-Plus、Redis、WebMvc、OpenAPI、自动填充等）
+│   ├── constant                   # 错误码 ErrorCode
+│   ├── entity                     # 基础实体 BaseEntity（id/createTime/updateTime/deleted/version）
+│   ├── exception                  # BusinessException + GlobalExceptionHandler
+│   ├── interceptor                # LoggingInterceptor 请求日志
+│   ├── page                       # PageQuery、PageResult
+│   ├── service                    # BaseService、BaseServiceImpl
+│   └── util                       # JsonUtil、RedisUtil、ValidationUtil
+├── controller                     # 控制层（按业务模块划分）
+├── service / service.impl         # 业务接口与实现
+├── mapper                         # MyBatis-Plus Mapper 接口
+├── entity                         # 数据库实体（继承 BaseEntity）
+├── dto                            # 请求 DTO（入参）
+├── vo                             # 视图对象 VO（出参）
+└── generator                      # MyBatis-Plus 代码生成器示例
+```
+
+### 3.2 分层与数据流约定
+
+- **Controller**：只做参数接收、校验（`@Valid`）和调用 Service，返回 `Result<T>`。
+- **入参**：统一使用 **DTO**（如 `UserCreateReq`、`UserUpdateReq`、`UserPageReq`），放在 `dto` 包下，配合 Jakarta Validation（`@NotBlank`、`@Email`、`@Size` 等）做校验。
+- **出参**：统一使用 **VO** 作为 `Result<T>` 的 `data`（如 `Result<UserVO>`、`Result<PageResult<UserVO>>`），放在 `vo` 包下；由 Service 层将实体转换为 VO，不直接暴露实体。
+- **统一约定**：**Controller：入参 DTO → Service（实体/业务）→ 出参 VO**。
+
+### 3.3 数据库初始化规范（mysql/init）
+
+- 脚本统一放在 `mysql/init` 目录，按序号命名，如：
+  - `001_init_schema.sql`：建库、建表
+  - `002_xxx_data.sql`：可选初始化数据
+- Docker Compose 已将 `mysql/init` 挂载到 MySQL 的 `/docker-entrypoint-initdb.d`，**首次**启动容器时会自动执行该目录下脚本。
+- 使用本机 MySQL 时，需手动执行上述 SQL 文件。
+
+---
+
+## 四、示例接口与统一响应
+
+### 4.1 统一响应结构 Result&lt;T&gt;
+
+所有接口返回格式一致：
+
+```json
+{
+  "code": 0,
+  "message": "OK",
+  "data": { ... },
+  "timestamp": 1698123456789
+}
+```
+
+- `code`：业务状态码（见 `ErrorCode`）
 - `message`：提示信息
-- `data`：返回数据（VO / 分页结果）
-- `timestamp`：时间戳
+- `data`：业务数据（VO 或分页结果）
+- `timestamp`：响应时间戳（毫秒）
 
-**用户模块示例接口：**
+### 4.2 用户模块示例接口
 
-- **创建用户**：`POST /api/users`
-  - 请求体：`UserCreateReq`（DTO）
-  - 响应：`Result<Long>`（新建用户 ID）
-- **更新用户**：`PUT /api/users`
-  - 请求体：`UserUpdateReq`（DTO）
-  - 响应：`Result<Void>`
-- **删除用户（逻辑删除）**：`DELETE /api/users/{id}`
-  - 响应：`Result<Void>`
-- **根据 ID 查询用户（带 Redis 缓存示例）**：`GET /api/users/{id}`
-  - 响应：`Result<UserVO>`
-- **查询全部用户（示例）**：`GET /api/users`
-  - 响应：`Result<List<User>>`（直接返回实体，仅作简单示例）
-- **分页查询用户**：`POST /api/users/page`
-  - 请求体：`UserPageReq`（DTO，包含分页参数和筛选条件）
-  - 响应：`Result<PageResult<UserVO>>`
+| 说明           | 方法 | 路径              | 请求体 / 说明                    | 响应 |
+|----------------|------|-------------------|----------------------------------|------|
+| 创建用户       | POST | /api/users        | UserCreateReq                    | Result&lt;Long&gt;（用户 ID） |
+| 更新用户       | PUT  | /api/users        | UserUpdateReq                    | Result&lt;Void&gt; |
+| 逻辑删除用户   | DELETE | /api/users/{id} | 路径参数 id                       | Result&lt;Void&gt; |
+| 按 ID 查询（带缓存） | GET  | /api/users/{id}   | -                                | Result&lt;UserVO&gt; |
+| 查询全部（示例） | GET  | /api/users        | -                                | Result&lt;List&lt;User&gt;&gt;（示例用） |
+| 分页查询       | POST | /api/users/page   | UserPageReq（含分页与筛选）      | Result&lt;PageResult&lt;UserVO&gt;&gt; |
 
-用户查询接口中，`UserServiceImpl` 内置了 **Redis 缓存示例**：  
-`getByIdWithCache` 会优先从 Redis 读取 `UserVO`，未命中则查询数据库并写入缓存。
+用户查询中，`UserServiceImpl.getByIdWithCache` 会优先从 Redis 读取 `UserVO`，未命中再查库并写入缓存（5 分钟过期），更新/删除时会清理对应缓存。
 
 ---
 
-## 在线接口文档（Knife4j）
+## 五、多环境配置
 
-应用启动后，可通过 Knife4j 查看和调试接口：
+主配置：`src/main/resources/application.yml`。
 
-- Knife4j UI：
-  - `http://localhost:8080/doc.html`
-- OpenAPI 文档（JSON）：
-  - `http://localhost:8080/v3/api-docs`
+| Profile | 说明           | 端口 | 数据库 / Redis 说明 |
+|---------|----------------|------|----------------------|
+| dev     | 本地开发（默认） | 8080 | localhost / demo_db、Redis db0 |
+| test    | 测试环境       | 8081 | demo_db_test、Redis db1 |
+| prod    | 生产/容器      | 8080 | 主机名 mysql、redis（配合 docker-compose） |
 
-在文档页面中可以查看：
-
-- 所有 Controller/接口列表
-- 请求 DTO 和返回 VO 的结构说明
-- 直接在线发起测试请求
+切换方式：修改 `application.yml` 中 `spring.profiles.active` 为 `dev` / `test` / `prod`。
 
 ---
 
-## 多环境配置
+## 六、Docker 部署
 
-使用主配置文件 `application.yml` 管理多环境：
-
-- `dev`：本地开发环境（默认激活）
-- `test`：测试环境
-- `prod`：生产 / 容器环境（默认连接 `docker-compose` 中的 `mysql` 和 `redis` 服务）
-
-切换环境方式：
-
-- 修改 `application.yml` 中：
-  ```yaml
-  spring:
-    profiles:
-      active: dev
-  ```
-  将 `dev` 替换为 `test` / `prod` 即可。
-
----
-
-## Docker 部署
-
-1. **构建 Jar 包**
+1. **打包**
 
    ```bash
    mvn clean package
    ```
 
-2. **使用 Docker Compose 一键启动（MySQL + Redis + 应用）**
+2. **一键启动（MySQL + Redis + 应用）**
 
    ```bash
    docker-compose up -d
    ```
 
-   - 数据库和缓存使用 `docker-compose.yml` 中配置的服务名（`mysql`、`redis`）
-   - 应用容器通过环境变量 `SPRING_PROFILES_ACTIVE=prod` 启动
+   应用容器通过环境变量 `SPRING_PROFILES_ACTIVE=prod` 使用 prod 配置，连接 compose 中的 `mysql`、`redis` 服务。
 
 ---
 
-## MyBatis-Plus 代码生成器
+## 七、MyBatis-Plus 代码生成器
 
-`generator/MybatisPlusCodeGenerator` 提供简单可执行的代码生成示例：
+`generator/MybatisPlusCodeGenerator` 提供按表生成 entity/mapper/service/controller 的示例：
 
-1. 根据实际数据库配置修改类中的常量：
-   - `URL`
-   - `USERNAME`
-   - `PASSWORD`
-2. 运行 `main` 方法：
-   - 可在 `entity/mapper/service/service.impl/controller` 等目录下生成指定表对应的基础代码。
+1. 根据实际库修改类中的常量：`URL`、`USERNAME`、`PASSWORD`。
+2. 运行其 `main` 方法，代码将生成到当前工程的 `entity`、`mapper`、`service`、`service.impl`、`controller` 等包下；若配置了 XML 路径，会生成到 `src/main/resources/mapper`。
+3. 生成后请按项目约定：**入参改为 DTO、出参改为 VO、Controller 返回 Result&lt;T&gt;**，并补充校验与注释。
 
-你可以在此模板基础上继续扩展：权限与认证（如 Spring Security）、多模块拆分、多租户支持、统一日志链路追踪等。
+---
+
+## 八、接手后进行业务开发的建议步骤
+
+1. **熟悉约定**：阅读本文「项目结构与约定」「分层与数据流约定」，保持 DTO/VO/Result 使用方式一致。
+2. **新增业务模块（以「订单」为例）**：
+   - 在 `entity` 下新增 `Order`（继承 `BaseEntity`），表名与字段与数据库一致。
+   - 在 `mapper` 下新增 `OrderMapper` 继承 `BaseMapper<Order>`。
+   - 在 `service` 与 `service.impl` 下新增 `OrderService`、`OrderServiceImpl`（可继承 `BaseService`/`BaseServiceImpl`）。
+   - 在 `dto` 下新增创建/更新/分页请求 DTO（如 `OrderCreateReq`、`OrderPageReq` 继承 `PageQuery`）。
+   - 在 `vo` 下新增 `OrderVO`。
+   - 在 `controller` 下新增 `OrderController`，路径如 `/api/orders`，入参 DTO、出参 `Result&lt;OrderVO&gt;` 或 `Result&lt;PageResult&lt;OrderVO&gt;&gt;`。
+3. **数据库**：在 `mysql/init` 下新增脚本（如 `002_order.sql`）建表，并确保本地/测试/生产环境执行到该脚本。
+4. **错误码与异常**：业务异常使用 `BusinessException`；如需新错误类型，在 `ErrorCode` 中增加枚举并在异常处理中复用。
+5. **接口文档**：Controller 上使用 `@Tag`、接口方法上使用 `@Operation`，Knife4j 会自动展示；DTO/VO 字段可加 `@Schema` 等注解增强可读性。
+
+按上述步骤即可在保持模板风格的前提下扩展新业务。
+
+---
+
+## 九、常见问题
+
+- **Q：首次 docker-compose 启动 MySQL 后，没有建表？**  
+  A：确认 `mysql/init` 已挂载到容器的 `/docker-entrypoint-initdb.d`，且仅首次启动时会执行；若数据卷已存在，需删除卷或新容器再试。
+
+- **Q：如何关闭 SQL 控制台打印？**  
+  A：在 `application.yml` 的 `mybatis-plus.configuration.log-impl` 中改为其他实现（如 `org.apache.ibatis.logging.nologging.NoLoggingImpl`），或删除该配置使用默认。
+
+- **Q：createTime / updateTime 没有自动填充？**  
+  A：项目已提供 `MybatisMetaObjectHandler`，实体需继承 `BaseEntity` 并使用其中的 `createTime`、`updateTime` 字段（已配置 `FieldFill.INSERT` / `INSERT_UPDATE`）。
+
+- **Q：Knife4j 文档地址？**  
+  A：应用启动后访问 `http://localhost:8080/doc.html`。
+
+---
+
+## 十、后续可扩展方向
+
+在现有模板上可继续扩展：权限与认证（如 Spring Security/JWT）、多模块拆分、多租户、统一日志与链路追踪（如 Sleuth/Micrometer）、消息队列、定时任务等。业务开发时建议先保持分层与 DTO/VO/Result 约定，再按需引入上述能力。

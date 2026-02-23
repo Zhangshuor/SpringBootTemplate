@@ -80,10 +80,10 @@ public class UserServiceImpl extends BaseServiceImpl<UserMapper, User> implement
         if (user == null) {
             return null;
         }
-        UserVO dto = toVO(user);
-        redisUtil.set(cacheKey, dto, Duration.ofMinutes(5));
+        UserVO vo = toVO(user);
+        redisUtil.set(cacheKey, vo, Duration.ofMinutes(5));
         log.info("写入用户缓存, id={}", id);
-        return dto;
+        return vo;
     }
 
     @Override
