@@ -64,5 +64,11 @@ public class UserController {
     public Result<PageResult<UserVO>> page(@Valid @RequestBody UserPageReq req) {
         return Result.success(userService.page(req));
     }
+
+    @Operation(summary = "测试接口")
+    @GetMapping("/test")
+    public Result<String> test() {
+        return Result.success("test");
+    }
 }
 
